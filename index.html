@@ -218,6 +218,27 @@ footer{border-top:1px solid var(--trait);margin-top:clamp(50px,8vw,120px);paddin
   #vb .x{top:0;right:0;width:46px;height:46px;font-size:28px}
   #vb .t{display:none}
 }
+
+/* largeur maximale : le site reste centre sur les grands ecrans */
+:root{--max:1500px}
+main{max-width:var(--max);margin-inline:auto}
+header,footer{padding-inline:max(var(--g),calc((100vw - var(--max))/2 + var(--g)))}
+
+/* au plus trois elements de front */
+.projets{grid-template-columns:repeat(6,1fr)}
+.pj{grid-column:span 2}
+.pj:nth-child(1),.pj:nth-child(2){grid-column:span 3}
+.fiches,.films{grid-template-columns:repeat(3,1fr)}
+@media(max-width:1000px){
+  .fiches,.films{grid-template-columns:repeat(2,1fr)}
+  .projets{grid-template-columns:repeat(2,1fr)}
+  .pj,.pj:nth-child(1),.pj:nth-child(2){grid-column:span 1;aspect-ratio:4/5}
+}
+@media(max-width:620px){
+  .fiches,.films{grid-template-columns:1fr}
+  .projets{grid-template-columns:1fr}
+  .pj,.pj:nth-child(1),.pj:nth-child(2){aspect-ratio:4/3}
+}
 </style>
 </head>
 <body>
