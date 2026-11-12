@@ -367,7 +367,7 @@ function accueil(){
   <div class="hero">${H.map((p,i)=>`<img src="i/${p[0]}.webp" alt="" class="ok ${i?"":"on"}">`).join("")}
     <div class="txt"><h1>Emmanuel <em>Quéau</em></h1><div class="metiers">${D.accueil.metiers.map(x=>`<span>${esc(x)}</span>`).join("")}</div></div></div>
   <div class="wrap intro">
-    <p class="g">${esc(D.accueil.phrase).replace(/\*([^*]+)\*/g,"<em>$1</em>")}</p>
+    <p class="g">${esc(D.accueil.phrase).replace(/\*([^*]+)\*/g,"<em>$1</em>").replace(/\n/g,"<br>")}</p>
     <div class="trois">${D.accueil.trois.map(x=>`<div><h3>${esc(x[0])}</h3><p>${esc(x[1])}</p></div>`).join("")}</div>
   </div>
   <section class="bloc wrap"><div class="tete"><h2>Focus</h2><a class="lien" href="#focus">Tous les dossiers</a></div><div class="projets">${D.focus.map(carte).join("")}</div></section>
