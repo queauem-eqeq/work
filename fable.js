@@ -107,7 +107,7 @@
     const si = (n, f) => { const s = un(n); if (s) f(s.corps, s); };
     if (p.type === "accueil") {
       const A = D.accueil;
-      si("Métiers", c => A.metiers = lPuces(c)); si("Phrase d'introduction", c => A.phrase = c.replace(/\s*\n\s*/g, " ")); si("Trois colonnes", c => A.trois = lPaires(c));
+      si("Métiers", c => A.metiers = lPuces(c)); si("Phrase d'introduction", c => A.phrase = c.split("\n").map(x => x.trim()).filter(Boolean).join("\n")); si("Trois colonnes", c => A.trois = lPaires(c));
       const h = S("Images d'ouverture"); if (h.length) D.heroSets = h.map(s => lImgs(s.corps, true)); else err.push("Aucun jeu d'images d'ouverture : conservés.");
     } else if (p.type === "apropos") {
       const A = D.apropos, bl = n => S(n).map(s => {
