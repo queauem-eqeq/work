@@ -333,7 +333,7 @@ const carte=o=>`<a class="pj" href="#${o.id}">${o.hero?img(o.hero,o.t):""}<div c
 function accueil(){
   const H=D.heroSets[Math.floor(Math.random()*D.heroSets.length)];
   const aff=D.affiches.slice(0,24).map(p=>`<a href="#ed-affiches">${img(p,"Affiche")}</a>`).join("");
-  const sp=D.edition.spinomag.slice(0,18).map(s=>`<a href="#${s.id}" data-doc="${esc(s.k)}">${img(s.c,"Spinomag "+s.t)}</a>`).join("");
+  const sp=D.edition.spinomag.slice(0,18).map(s=>`<a href="#" data-doc="${esc(s.k)}">${img(s.c,"Spinomag "+s.t)}</a>`).join("");
   const T=D.tuiles,R=D.rub;
   app.innerHTML=`
   <div class="hero">${H.map((p,i)=>`<img src="i/${p[0]}.webp" alt="" class="ok ${i?"":"on"}">`).join("")}
@@ -376,7 +376,7 @@ function focusItem(p){
       + ((p.diplomes&&p.diplomes.length)?`<div class="bandeau dip">${p.diplomes.map((x,i)=>`<a href="#" data-lb="${nd0+i}">${img(x,"Remise des prix")}</a>`).join("")}</div>`:"")
     : p.chiffres.length ? `<div class="chiffres">${p.chiffres.map(c=>`<div><b>${esc(c[0])}</b><span>${esc(c[1])}</span></div>`).join("")}</div>` : "";
   h+=`<div class="wrap">${tete2}<div class="sections">${sec}</div></div>`;
-  if(p.id==="f-spinomag"){h+=`<div class="wrap" style="margin-top:50px"><div class="mur">${D.edition.spinomag.map(s=>`<div><a href="#${s.id}" data-doc="${esc(s.k)}">${img(s.c,"Spinomag "+s.t)}</a><div class="leg"><b>${esc(s.t)}</b><span>${esc(s.d)}</span></div></div>`).join("")}</div><p class="note">Cliquez sur une couverture pour feuilleter le numéro.</p></div>`;app.innerHTML=h;return}
+  if(p.id==="f-spinomag"){h+=`<div class="wrap" style="margin-top:50px"><div class="mur">${D.edition.spinomag.map(s=>`<div><a href="#" data-doc="${esc(s.k)}">${img(s.c,"Spinomag "+s.t)}</a><div class="leg"><b>${esc(s.t)}</b><span>${esc(s.d)}</span></div></div>`).join("")}</div><p class="note">Cliquez sur une couverture pour feuilleter le numéro.</p></div>`;app.innerHTML=h;return}
   if(p.galerie.length)h+=`<div class="wrap">${p.grille
     ? `<div class="grille" style="grid-template-columns:repeat(${p.grille},1fr)">${p.galerie.map((x,i)=>`<a href="#" data-lb="${g0+i}">${img(x,p.t)}</a>`).join("")}</div>`
     : rangs(p.galerie,g0)}</div>`;
@@ -397,21 +397,13 @@ function edition(k){
   let corps="";
   if(k==="affiches"){corps=`<div class="mur">${D.affiches.map((p,i)=>`<a href="#" data-lb="${i}">${img(p,"Affiche")}</a>`).join("")}</div>`}
   else if(k==="voeux"){corps=rangs(E.voeux,0)}
-  else{corps=`<div class="mur">${E[k].map(s=>`<div><a href="#${s.id}" data-doc="${esc(s.k)}">${img(s.c,s.t)}</a><div class="leg"><b>${esc(s.t)}</b><span>${esc(s.d)}${s.d?" · ":""}${s.n} pages</span></div></div>`).join("")}</div>`}
+  else{corps=`<div class="mur">${E[k].map(s=>`<div><a href="#" data-doc="${esc(s.k)}">${img(s.c,s.t)}</a><div class="leg"><b>${esc(s.t)}</b><span>${esc(s.d)}${s.d?" · ":""}${s.n} pages</span></div></div>`).join("")}</div>`}
   app.innerHTML=tete(cap,titre,lede)+
    `<div class="wrap"><div class="onglets">${E.onglets.map(o=>`<a href="#ed-${o[0]}" class="${o[0]===k?"on":""}">${esc(o[1])}</a>`).join("")}</div>
     ${k==="spinomag"?`<p class="note" style="margin:-10px 0 24px"><a class="lien" href="https://www.calameo.com/accounts/7710912" target="_blank" rel="noopener">Feuilleter sur Calaméo</a> &nbsp; <a class="lien" href="#f-spinomag">Le Spinomag en détail</a></p>`:""}
     ${corps}</div>`;
   if(k==="affiches")lier(D.affiches); else if(k==="voeux")lier(E.voeux);
 }
-function docView(key){
-  const d=D.docs[key];
-  const onglet=D.edition.spinomag.some(x=>x.k===key)?"spinomag":D.edition.saison.some(x=>x.k===key)?"saison":"guides";
-  app.innerHTML=tete(d.d||"Édition",d.t,`${d.p.length} pages. Cliquez sur une page pour l'agrandir.`,["ed-"+onglet,EDT[onglet][0]])+
-  `<div class="wrap"><div class="pages">${d.p.map((p,i)=>`<a href="#" data-lb="${i}"><img src="s/${p[0]}.webp" width="${p[1]}" height="${p[2]}" alt="Page ${i+1}" loading="lazy" decoding="async" class="ok"></a>`).join("")}</div></div>`;
-  lier(d.p);
-}
-
 /* ---------- photo ---------- */
 function photo(k){
   k=k||"spectacles";const R=D.rub[k];
@@ -485,7 +477,6 @@ function route(){
   if(FX[h]){focusItem(FX[h]);sec="focus"}
   else if(IAX[h]){iaItem(IAX[h]);sec="ia"}
   else if(IDX[h]){fiche(...IDX[h]);sec="photo"}
-  else if(h.startsWith("doc-")&&D.docs[h.slice(4)]){docView(h.slice(4));sec="edition"}
   else if(h==="focus"||h==="projets"){focus();sec="focus"}
   else if(h==="edition"){edition("spinomag")}
   else if(h.startsWith("ed-")){edition(h.slice(3));sec="edition"}
