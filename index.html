@@ -291,7 +291,7 @@ header,footer{padding-inline:max(var(--g),calc((100vw - var(--max))/2 + var(--g)
 <footer><span>Emmanuel Quéau · Communication, graphisme, photographie, vidéo</span><span>queau.emm@gmail.com · 06 25 75 70 22</span></footer>
 <div id="vb" role="dialog" aria-label="Lecteur video" aria-modal="true"><button class="x" aria-label="Fermer la video">×</button><div class="cadre"></div><div class="t"></div></div>
 <div id="lb" role="dialog" aria-label="Visionneuse"><button class="x" aria-label="Fermer">×</button><button class="p" aria-label="Image précédente">‹</button><img alt=""><button class="s" aria-label="Image suivante">›</button><div class="c"></div></div>
-<script src="data.js"></script>
+<script>/* données toujours à jour : l'adresse change chaque minute, le navigateur ne ressert donc jamais une ancienne copie */document.write('<script src="data.js?v='+Math.floor(Date.now()/6e4)+'"><\/script>')</script>
 <script>
 const MENU=[["focus","Focus"],["edition","Édition"],["photo","Photo"],["ia","IA"],["video","Vidéo"],["archives","Archives"],["a-propos","À propos"]];
 const $=s=>document.querySelector(s), app=$("#app");
