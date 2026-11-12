@@ -38,7 +38,7 @@ label{display:block;font-size:12px;color:var(--g);margin:10px 0 3px}
 <script>
 "use strict";
 const DEPOT="queauem-eqeq/work", API="https://api.github.com/repos/"+DEPOT;
-const BRANCHE=new URLSearchParams(location.search).get("branche")||"backoffice";
+const BRANCHE=new URLSearchParams(location.search).get("branche")||"main";
 const RAW=`https://raw.githubusercontent.com/${DEPOT}/${BRANCHE}/`;
 const $=s=>document.querySelector(s), el=(t,a={},...k)=>{const e=document.createElement(t);for(const[n,v]of Object.entries(a)){if(n==="on")for(const[ev,f]of Object.entries(v))e.addEventListener(ev,f);else if(n==="html")e.innerHTML=v;else if(v!==false&&v!=null)e.setAttribute(n,v===true?"":v)}k.flat().forEach(c=>e.append(c));return e};
 let D=null,JETON="",DOSSIER=null,shaTete="";

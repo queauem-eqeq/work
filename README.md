@@ -25,3 +25,9 @@ le dépôt est public, mais le site n'est pas référencé.
 Un dossier Focus qui porte une clé `recit` (aujourd'hui : TZCLD) s'affiche en chapitres,
 un temps de texte puis un temps d'images légendées (fonction `recit()` dans `index.html`).
 Sa source est `01_Focus\<dossier>\texte.md` et `recit.json` dans `FABLE_SITE`.
+
+## Administration (back office)
+
+- `data.js` contient toutes les données du site (`const D = …`) ; `index.html` ne contient plus que la mise en page et le code.
+- `admin.html` est la page d'administration : textes et images des Focus, visites, spectacles, séries, fiches IA, murs d'images d'Édition, page d'accueil et À propos. Elle ne contient aucun secret : la clé GitHub est saisie par l'utilisateur et conservée chiffrée dans son navigateur.
+- Chaque enregistrement est un commit « Administration : … » sur `main`. Retour à l'état d'avant le back office : étiquette `avant-backoffice`.
