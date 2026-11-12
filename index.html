@@ -367,7 +367,7 @@ function accueil(){
   <div class="hero">${H.map((p,i)=>`<img src="i/${p[0]}.webp" alt="" class="ok ${i?"":"on"}">`).join("")}
     <div class="txt"><h1>Emmanuel <em>Quéau</em></h1><div class="metiers">${D.accueil.metiers.map(x=>`<span>${esc(x)}</span>`).join("")}</div></div></div>
   <div class="wrap intro">
-    <p class="g">${esc(D.accueil.phrase).replace(/\*([^*]+)\*/g,"<em>$1</em>").replace(/\n/g,"<br>")}</p>
+    <p class="g" id="accroche">${esc(D.accueil.phrase).replace(/\*([^*]+)\*/g,"<em>$1</em>").replace(/\n/g,"<br>")}</p>
     <div class="trois">${D.accueil.trois.map(x=>`<div><h3>${esc(x[0])}</h3><p>${esc(x[1])}</p></div>`).join("")}</div>
   </div>
   <section class="bloc wrap"><div class="tete"><h2>Focus</h2><a class="lien" href="#focus">Tous les dossiers</a></div><div class="projets">${D.focus.map(carte).join("")}</div></section>
@@ -379,6 +379,7 @@ function accueil(){
   <section class="bloc wrap"><div class="tete"><h2>Vidéo</h2><a class="lien" href="#video">${D.films.length} films</a></div><div class="films">${D.films.slice(0,6).map((f,i)=>film(f,i+1)).join("")}</div></section>`;
   const im=[...app.querySelectorAll(".hero img")];let k=0;clearInterval(window._h);
   if(!matchMedia("(prefers-reduced-motion:reduce)").matches)window._h=setInterval(()=>{im[k].classList.remove("on");k=(k+1)%im.length;im[k].classList.add("on")},5200);
+  ajusteAccroche();
 }
 
 /* ---------- focus ---------- */
@@ -565,6 +566,13 @@ function route(){
   scrollTo(0,0);hydrate();
 }
 $("#burger").onclick=()=>{const o=$("#menu").classList.toggle("ouvert");$("#burger").setAttribute("aria-expanded",o);$("#burger").textContent=o?"Fermer":"Menu"};
+/* phrase d'accueil : le corps du texte est calculé pour que la ligne la plus longue occupe toute la largeur de sa colonne */
+function ajusteAccroche(){const p=document.getElementById("accroche");if(!p)return;
+  p.style.whiteSpace="nowrap";p.style.fontSize="100px";const r=document.createRange();r.selectNodeContents(p);const l=r.getBoundingClientRect().width;
+  p.style.fontSize="10px";const c=p.clientWidth;
+  const t=l&&c?Math.min(130,100*c/l*.995):0;
+  if(t>=20){p.style.fontSize=t.toFixed(2)+"px"}else{p.style.fontSize="";p.style.whiteSpace=""}}
+addEventListener("resize",ajusteAccroche);if(document.fonts){document.fonts.ready.then(ajusteAccroche);document.fonts.addEventListener("loadingdone",ajusteAccroche)}
 addEventListener("hashchange",route);
 addEventListener("scroll",()=>$("#hd").classList.toggle("plein",scrollY>60),{passive:true});
 let rz;addEventListener("resize",()=>{clearTimeout(rz);const w=innerWidth;rz=setTimeout(()=>{
