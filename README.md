@@ -19,3 +19,9 @@ et `F:\WORK\IAZONE\CLAUDE_SITE`.
 
 `robots.txt` et la balise `noindex` tiennent le site hors des moteurs de recherche :
 le dépôt est public, mais le site n'est pas référencé.
+
+## Dossiers Focus en récit
+
+Un dossier Focus qui porte une clé `recit` (aujourd'hui : TZCLD) s'affiche en chapitres,
+un temps de texte puis un temps d'images légendées (fonction `recit()` dans `index.html`).
+Sa source est `01_Focus\<dossier>\texte.md` et `recit.json` dans `FABLE_SITE`.
