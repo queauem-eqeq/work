@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Portfolio · administration</title>
+<style>
+:root{--f:#0c0c0c;--p:#161616;--t:#2a2a2a;--x:#f1ede4;--g:#9a958c;--r:#e0343f;--v:#3fae6b}
+*{box-sizing:border-box}body{margin:0;background:var(--f);color:var(--x);font:15px/1.5 system-ui,Segoe UI,sans-serif}
+button,input,textarea,select{font:inherit;color:inherit}
+button{background:none;border:1px solid var(--t);padding:7px 13px;cursor:pointer}button:hover{border-color:var(--x)}
+button.go{background:var(--r);border-color:var(--r);font-weight:600}button:disabled{opacity:.4;cursor:default}
+input,textarea{width:100%;background:var(--p);border:1px solid var(--t);padding:8px 10px}textarea{resize:vertical;min-height:38px}
+input:focus,textarea:focus{outline:1px solid var(--r)}
+#barre{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;padding:10px 16px;background:#000;border-bottom:1px solid var(--t);flex-wrap:wrap}
+#barre b{font-size:16px;margin-right:auto}#etat{color:var(--g);font-size:13px}
+#corps{display:grid;grid-template-columns:270px 1fr;min-height:calc(100vh - 52px)}
+#menu{border-right:1px solid var(--t);padding:10px 0;overflow:auto;max-height:calc(100vh - 52px);position:sticky;top:52px}
+#menu h4{margin:14px 16px 4px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--g)}
+#menu a{display:block;padding:5px 16px;color:var(--x);text-decoration:none;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#menu a:hover{background:var(--p)}#menu a.on{background:var(--p);border-left:3px solid var(--r);padding-left:13px}#menu a.mod::after{content:" ●";color:var(--r)}
+#page{padding:22px 28px 120px;max-width:1100px}
+h1{font:400 30px Georgia,serif;margin:0 0 4px}h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--g);margin:28px 0 8px;border-top:1px solid var(--t);padding-top:14px}
+label{display:block;font-size:12px;color:var(--g);margin:10px 0 3px}
+.ligne{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}.ligne textarea,.ligne input{flex:1}.ligne button{padding:6px 9px;flex:none}
+.imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;padding:8px;border:1px dashed var(--t);min-height:90px}
+.imgs.sur{border-color:var(--r);background:#1c1012}
+.im{position:relative;background:var(--p);cursor:grab}.im img{display:block;width:100%;aspect-ratio:1;object-fit:cover}
+.im .x{position:absolute;top:3px;right:3px;background:#000c;border:0;width:24px;height:24px;padding:0;line-height:1}.im .x:hover{background:var(--r)}
+.im input{font-size:11px;padding:3px 5px;border:0;border-top:1px solid var(--t)}.im.neuf{outline:2px solid var(--v)}.im.dr{opacity:.35}
+.depot{color:var(--g);font-size:12px;margin-top:4px}
+.bloc{border:1px solid var(--t);padding:12px 14px;margin-bottom:12px;background:#111}.bloc>.tt{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--g);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}.bloc>.tt span{margin-right:auto}
+#voile[hidden]{display:none}#voile{position:fixed;inset:0;background:#000d;display:grid;place-items:center;z-index:20}#voile>div{background:var(--p);border:1px solid var(--t);padding:26px;width:min(480px,92vw)}
+#voile p{color:var(--g);font-size:13px}.err{color:var(--r)}
+#journal{white-space:pre-wrap;font:12px/1.5 ui-monospace,monospace;color:var(--g);margin-top:10px}
+</style></head><body>
+<div id="barre"><b>Portfolio · administration</b><span id="etat"></span>
+<button id="bDossier">Choisir le dossier FABLE_SITE</button><button id="bSave" class="go" disabled>Enregistrer</button></div>
+<div id="corps"><div id="menu"></div><div id="page"><p style="color:var(--g)">Choisissez une page à gauche.</p></div></div>
+<div id="voile"><div id="acces"></div></div>
+<script>
+"use strict";
+const DEPOT="queauem-eqeq/work", API="https://api.github.com/repos/"+DEPOT;
+const BRANCHE=new URLSearchParams(location.search).get("branche")||"backoffice";
+const RAW=`https://raw.githubusercontent.com/${DEPOT}/${BRANCHE}/`;
+const $=s=>document.querySelector(s), el=(t,a={},...k)=>{const e=document.createElement(t);for(const[n,v]of Object.entries(a)){if(n==="on")for(const[ev,f]of Object.entries(v))e.addEventListener(ev,f);else if(n==="html")e.innerHTML=v;else if(v!==false&&v!=null)e.setAttribute(n,v===true?"":v)}k.flat().forEach(c=>e.append(c));return e};
+let D=null,JETON="",DOSSIER=null,shaTete="";
+const MOD=new Set(),NEUF=new Map(),JOURNAL=[];   // pages modifiées · images ajoutées (id → {i,s,orig}) · opérations
+const etat=t=>$("#etat").textContent=t;
+
+/* ---------- accès : la clé GitHub est chiffrée par un mot de passe, dans ce navigateur ---------- */
+const enc=new TextEncoder(),dec=new TextDecoder(),b64=u=>btoa(String.fromCharCode(...new Uint8Array(u))),ub64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function cleDe(mdp,sel){const k=await crypto.subtle.importKey("raw",enc.encode(mdp),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:sel,iterations:250000,hash:"SHA-256"},k,{name:"AES-GCM",length:256},false,["encrypt","decrypt"])}
+async function chiffrer(mdp,txt){const sel=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const c=await crypto.subtle.encrypt({name:"AES-GCM",iv},await cleDe(mdp,sel),enc.encode(txt));return JSON.stringify({s:b64(sel),i:b64(iv),c:b64(c)})}
+async function dechiffrer(mdp,j){const o=JSON.parse(j);return dec.decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:ub64(o.i)},await cleDe(mdp,ub64(o.s)),ub64(o.c)))}
+function ecranAcces(msg){
+  const a=$("#acces"),coffre=localStorage.getItem("bo_coffre");a.innerHTML="";
+  const mdp=el("input",{type:"password",placeholder:"Mot de passe",autocomplete:"current-password"});
+  if(coffre){
+    a.append(el("h1",{},"Déverrouiller"),el("p",{},"Votre clé GitHub est enregistrée, chiffrée, dans ce navigateur."),mdp,
+      el("p",{class:"err"},msg||""),el("div",{class:"ligne"},
+        el("button",{class:"go",on:{click:async()=>{try{JETON=await dechiffrer(mdp.value,coffre);demarrer()}catch(e){ecranAcces("Mot de passe incorrect.")}}}},"Ouvrir"),
+        el("button",{on:{click:()=>{if(confirm("Oublier la clé enregistrée dans ce navigateur ?")){localStorage.removeItem("bo_coffre");ecranAcces()}}}},"Oublier la clé")));
+    mdp.addEventListener("keydown",e=>{if(e.key==="Enter")a.querySelector(".go").click()});
+  }else{
+    const cle=el("input",{type:"password",placeholder:"github_pat_…",autocomplete:"off"}),m2=el("input",{type:"password",placeholder:"Confirmer le mot de passe"});
+    a.append(el("h1",{},"Première ouverture"),el("p",{},"Collez votre clé GitHub (accès au seul dépôt « work », contenu en lecture et écriture), puis choisissez un mot de passe. La clé est chiffrée et ne quitte pas ce navigateur."),
+      el("label",{},"Clé GitHub"),cle,el("label",{},"Mot de passe (8 caractères au moins)"),mdp,m2,el("p",{class:"err"},msg||""),
+      el("button",{class:"go",on:{click:async()=>{
+        if(!cle.value.trim())return ecranAcces("Collez la clé.");if(mdp.value.length<8)return ecranAcces("Mot de passe trop court.");if(mdp.value!==m2.value)return ecranAcces("Les deux mots de passe diffèrent.");
+        localStorage.setItem("bo_coffre",await chiffrer(mdp.value,cle.value.trim()));JETON=cle.value.trim();demarrer()}}},"Enregistrer et ouvrir"));
+  }
+  $("#voile").hidden=false;(coffre?mdp:a.querySelector("input")).focus();
+}
+
+/* ---------- GitHub ---------- */
+async function gh(chemin,opt={}){
+  const r=await fetch(chemin.startsWith("http")?chemin:API+chemin,{...opt,headers:{Authorization:"Bearer "+JETON,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28",...(opt.body?{"Content-Type":"application/json"}:{})}});
+  if(!r.ok)throw new Error(`GitHub ${r.status} sur ${chemin.replace(API,"")} : ${(await r.text()).slice(0,200)}`);return r.json()}
+async function demarrer(){
+  try{
+    etat("Lecture des données…");
+    const ref=await gh(`/git/ref/heads/${BRANCHE}`);shaTete=ref.object.sha;
+    const f=await gh(`/contents/data.js?ref=${shaTete}`,{});
+    const txt=f.content?dec.decode(ub64(f.content.replace(/\n/g,""))):await (await fetch(f.download_url)).text();
+    D=JSON.parse(txt.slice(txt.indexOf("{"),txt.lastIndexOf("}")+1));
+    $("#voile").hidden=true;menu();etat(`Branche « ${BRANCHE} » · dossier FABLE_SITE non choisi`);
+  }catch(e){JETON="";ecranAcces(String(e.message||e))}
+}
+
+/* ---------- pages ---------- */
+function pages(){
+  const L=[["Général",[["accueil","Page d'accueil"],["apropos","À propos"]]],["Focus",D.focus.map(f=>[f.id,f.t])]];
+  for(const k of Object.keys(D.rub))L.push([D.rub[k].label,D.rub[k].items.map(o=>[o.id,o.t])]);
+  L.push(["IA et automatisation",D.ia.map(o=>[o.id,o.t])],["Édition : murs d'images",[["affiches","Affiches"],["voeux","Cartes de vœux"],["infotravaux","Infos travaux"]]]);return L}
+let COUR=null;
+function menu(){const m=$("#menu");m.innerHTML="";for(const[t,l]of pages()){m.append(el("h4",{},t));for(const[id,n]of l)m.append(el("a",{href:"#"+id,class:(id===COUR?"on ":"")+(MOD.has(id)?"mod":"")},n))}}
+addEventListener("hashchange",()=>ouvrir(location.hash.slice(1)));
+let APRES=null;
+const touche=()=>{if(APRES)APRES();if(COUR){MOD.add(COUR);menu();$("#bSave").disabled=false}};
+
+/* champs */
+const champ=(o,k,lib,long)=>{const i=el(long?"textarea":"input",{rows:long?Math.max(2,Math.ceil((o[k]||"").length/95)):null});i.value=o[k]??"";i.addEventListener("input",()=>{o[k]=i.value;touche()});return[el("label",{},lib),i]};
+function liste(arr,lib,long=true,vide=()=>""){            // liste de textes : modifier, ajouter, retirer, monter
+  const z=el("div"),dessiner=()=>{z.innerHTML="";arr.forEach((v,n)=>{const i=el(long?"textarea":"input",{rows:long?Math.max(2,Math.ceil(String(v).length/95)):null});i.value=v;i.addEventListener("input",()=>{arr[n]=i.value;touche()});
+      z.append(el("div",{class:"ligne"},i,el("button",{title:"Monter",on:{click:()=>{if(n){[arr[n-1],arr[n]]=[arr[n],arr[n-1]];touche();dessiner()}}}},"↑"),el("button",{title:"Supprimer",on:{click:()=>{arr.splice(n,1);touche();dessiner()}}},"×")))});
+    z.append(el("button",{on:{click:()=>{arr.push(vide());touche();dessiner()}}},"+ Ajouter"))};dessiner();return[el("label",{},lib),z]}
+function paires(arr,lib,a="Titre",b="Texte"){
+  const z=el("div"),dessiner=()=>{z.innerHTML="";arr.forEach((v,n)=>{const i=el("input",{placeholder:a}),j=el("textarea",{placeholder:b,rows:2});i.value=v[0];j.value=v[1];i.style.maxWidth="240px";
+      i.addEventListener("input",()=>{v[0]=i.value;touche()});j.addEventListener("input",()=>{v[1]=j.value;touche()});
+      z.append(el("div",{class:"ligne"},i,j,el("button",{on:{click:()=>{arr.splice(n,1);touche();dessiner()}}},"×")))});
+    z.append(el("button",{on:{click:()=>{arr.push(["",""]);touche();dessiner()}}},"+ Ajouter"))};dessiner();return[el("label",{},lib),z]}
+
+/* images : supprimer, réordonner, déposer */
+const src=p=>NEUF.has(p[0])?NEUF.get(p[0]).url:`${RAW}s/${p[0]}.webp`;
+let GLISSE=null;
+function images(arr,lib,avecLegende){
+  const z=el("div",{class:"imgs"}),dessiner=()=>{z.innerHTML="";
+    arr.forEach((p,n)=>{const c=el("div",{class:"im"+(NEUF.has(p[0])?" neuf":""),draggable:true},el("img",{src:src(p),loading:"lazy",alt:""}),
+        el("button",{class:"x",title:"Retirer cette image",on:{click:()=>{JOURNAL.push(`− image ${p[0]} (${COUR})`);arr.splice(n,1);touche();dessiner()}}},"×"));
+      if(avecLegende){const i=el("input",{placeholder:"Légende"});i.value=p[3]||"";i.addEventListener("input",()=>{p[3]=i.value;touche()});c.append(i)}
+      c.addEventListener("dragstart",e=>{GLISSE={arr,n};c.classList.add("dr");e.dataTransfer.effectAllowed="move"});c.addEventListener("dragend",()=>{c.classList.remove("dr");GLISSE=null});
+      c.addEventListener("dragover",e=>e.preventDefault());
+      c.addEventListener("drop",e=>{if(GLISSE&&GLISSE.arr===arr){e.preventDefault();e.stopPropagation();const[x]=arr.splice(GLISSE.n,1);arr.splice(n,0,x);touche();dessiner()}});z.append(c)})};
+  z.addEventListener("dragover",e=>{e.preventDefault();if(!GLISSE)z.classList.add("sur")});z.addEventListener("dragleave",()=>z.classList.remove("sur"));
+  z.addEventListener("drop",async e=>{e.preventDefault();z.classList.remove("sur");if(GLISSE)return;
+    for(const f of [...e.dataTransfer.files].filter(f=>/^image\//.test(f.type))){etat("Préparation de "+f.name+"…");try{const p=await preparer(f);arr.push(avecLegende?[...p,""]:p);JOURNAL.push(`+ image ${p[0]} « ${f.name} » (${COUR})`);touche();dessiner()}catch(er){alert("Image illisible : "+f.name)}}etat("")});
+  dessiner();return[el("label",{},lib),z,el("div",{class:"depot"},"Glissez des images ici pour en ajouter · glissez une vignette pour la déplacer · × pour la retirer")]}
+async function reduire(bmp,max,q){const r=Math.min(1,max/Math.max(bmp.width,bmp.height)),w=Math.round(bmp.width*r),h=Math.round(bmp.height*r),c=new OffscreenCanvas(w,h);
+  const x=c.getContext("2d");x.imageSmoothingQuality="high";x.drawImage(bmp,0,0,w,h);return{blob:await c.convertToBlob({type:"image/webp",quality:q}),w,h}}
+async function preparer(f){const bmp=await createImageBitmap(f),g=await reduire(bmp,1600,.84),s=await reduire(bmp,1000,.8),id=D.n++;
+  NEUF.set(id,{i:g.blob,s:s.blob,orig:f,url:URL.createObjectURL(s.blob),page:COUR});return[id,g.w,g.h]}
+
+/* formulaires par type de page */
+function ouvrir(id){
+  COUR=id;APRES=null;menu();const P=$("#page");P.innerHTML="";const ajoute=(...x)=>P.append(...x.flat());
+  if(id==="accueil"){const A=D.accueil;ajoute(el("h1",{},"Page d'accueil"),liste(A.metiers,"Métiers sous le nom",false),champ(A,"phrase","Phrase d'introduction (entourez d'astérisques *le passage en italique*)",true),paires(A.trois,"Trois colonnes"));
+    D.heroSets.forEach((h,n)=>ajoute(el("h2",{},"Images d'ouverture, jeu "+(n+1)),images(h,"Tirées au hasard à chaque visite")));return}
+  if(id==="apropos"){const A=D.apropos,bl=(L,t)=>{ajoute(el("h2",{},t));L.forEach((e,n)=>{const b=el("div",{class:"bloc"},el("div",{class:"tt"},el("span",{},e.t||"Nouvelle ligne"),el("button",{on:{click:()=>{L.splice(n,1);touche();ouvrir(id)}}},"Supprimer")));
+        b.append(...champ(e,"d","Dates"),...champ(e,"t","Intitulé"),...champ(e,"p","Texte",true),...liste(e.li=e.li||[],"Puces"),...champ(e,"note","Note sous le texte"));P.append(b)});
+      P.append(el("button",{on:{click:()=>{L.push({d:"",t:"",p:"",li:[],note:""});touche();ouvrir(id)}}},"+ Ajouter une ligne"))};
+    ajoute(el("h1",{},"À propos"),champ(A,"chapo","Chapô",true));bl(A.exp,"Expérience");bl(A.formation,"Formation");ajoute(el("h2",{},"Puces"),liste(A.competences,"Compétences",false),liste(A.aussi,"Et aussi",false));return}
+  const mur={affiches:[D.affiches,"Affiches"],voeux:[D.edition.voeux,"Cartes de vœux"],infotravaux:[D.edition.infotravaux,"Infos travaux"]}[id];
+  if(mur){ajoute(el("h1",{},mur[1]),images(mur[0],mur[0].length+" images, dans l'ordre d'affichage"));return}
+  const f=D.focus.find(x=>x.id===id);
+  if(f){ajoute(el("h1",{},f.t),champ(f,"t","Titre"),champ(f,"k","Bandeau"),champ(f,"c","Chapô",true),paires(f.chiffres,"Chiffres clés","Chiffre","Libellé"));
+    if(f.hero){const h=[f.hero];ajoute(el("h2",{},"Image d'ouverture"),images(h,"Une seule image : déposez la nouvelle, puis retirez l'ancienne"));APRES=()=>{if(h.length)f.hero=h[h.length-1].slice(0,3)}}
+    if(f.recit){ajoute(el("h2",{},"Récit : chapitres et images"));f.recit.forEach((b,n)=>{
+        const sup=el("button",{on:{click:()=>{if(confirm("Supprimer ce bloc ?")){f.recit.splice(n,1);touche();ouvrir(id)}}}},"Supprimer"),mont=el("button",{on:{click:()=>{if(n){[f.recit[n-1],f.recit[n]]=[f.recit[n],f.recit[n-1]];touche();ouvrir(id)}}}},"↑");
+        const bx=el("div",{class:"bloc"});
+        if(b.h!==undefined){bx.append(el("div",{class:"tt"},el("span",{},"Texte "+(b.n||"")),mont,sup),...champ(b,"k","Mot-clé"),...champ(b,"d","Période"),...champ(b,"h","Titre"),...(b.liste?liste(b.liste,"Puces"):liste(b.x=b.x||[],"Paragraphes")))}
+        else if(b.img){bx.append(el("div",{class:"tt"},el("span",{},b.pg?"Images (pages, affiches)":b.mur?"Images (mosaïque)":"Images (rangée)"),mont,sup),...champ(b,"leg","Légende du bloc",true),...images(b.img,"Images",true))}
+        else bx.append(el("div",{class:"tt"},el("span",{},b.films?"Films":"Liens"),mont,sup),el("p",{class:"depot"},"Ce bloc se modifie en me le demandant."));
+        P.append(bx)});
+      ajoute(el("div",{class:"ligne"},el("button",{on:{click:()=>{f.recit.push({n:"",k:"",d:"",h:"",x:[""]});touche();ouvrir(id)}}},"+ Bloc de texte"),el("button",{on:{click:()=>{f.recit.push({img:[],leg:""});touche();ouvrir(id)}}},"+ Bloc d'images")))}
+    else{(f.sections||[]).forEach(s=>ajoute(el("h2",{},s[0]),liste(s[1],"Paragraphes")));ajoute(el("h2",{},"Galerie"),images(f.galerie,f.galerie.length+" images"))}
+    return}
+  for(const k of Object.keys(D.rub)){const o=D.rub[k].items.find(x=>x.id===id);if(o){ajoute(el("h1",{},o.t),champ(o,"t","Titre"),champ(o,"d","Date"),champ(o,"w","Personnalités (séparées par des points-virgules)"),liste(o.x,"Paragraphes (le premier sert de chapô)"),el("h2",{},"Images"),images(o.p,"La première est l'image d'ouverture"));return}}
+  const o=D.ia.find(x=>x.id===id);
+  if(o){ajoute(el("h1",{},o.t),champ(o,"t","Titre"),champ(o,"k","Catégorie"),champ(o,"d","Année"),liste(o.x,"Paragraphes (### pour un intertitre, • pour une puce)"),paires(o.liens,"Liens","Libellé","Adresse"),el("h2",{},"Images"),images(o.p,"La première est l'image d'ouverture",true));return}
+  P.append(el("p",{},"Page inconnue."));
+}
+
+/* ---------- enregistrement ---------- */
+const refs=()=>{const S=new Set(),v=o=>{if(Array.isArray(o)){if(o.length>=3&&typeof o[0]==="number"&&typeof o[1]==="number"&&typeof o[2]==="number")S.add(o[0]);o.forEach(v)}else if(o&&typeof o==="object")Object.values(o).forEach(v)};v(D);return S};
+const blob64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result.split(",")[1]);f.readAsDataURL(b)});
+function texteDe(id){   // version lisible, écrite dans FABLE_SITE
+  const L=[],t=x=>L.push(x,""),f=D.focus.find(x=>x.id===id),ims=a=>a.map(p=>p[0]+(p[3]?` (${p[3]})`:"")).join(", ");
+  if(id==="accueil"){const A=D.accueil;t("# Page d'accueil");t("## Métiers\n"+A.metiers.map(x=>"- "+x).join("\n"));t("## Phrase d'introduction\n"+A.phrase);A.trois.forEach(x=>t(`## ${x[0]}\n${x[1]}`));D.heroSets.forEach((h,n)=>t(`## Images d'ouverture, jeu ${n+1}\n${ims(h)}`))}
+  else if(id==="apropos"){const A=D.apropos,b=e=>t(`### ${e.d} — ${e.t}\n${e.p||""}${(e.li||[]).map(x=>"\n- "+x).join("")}${e.note?"\n"+e.note:""}`);t("# À propos");t(A.chapo);t("## Expérience");A.exp.forEach(b);t("## Formation");A.formation.forEach(b);t("## Compétences\n"+A.competences.map(x=>"- "+x).join("\n"));t("## Et aussi\n"+A.aussi.map(x=>"- "+x).join("\n"))}
+  else if(f){t("# "+f.t);t("## Bandeau\n"+f.k);t("## Chapô\n"+f.c);t("## Chiffres clés\n"+f.chiffres.map(c=>`- **${c[0]}** — ${c[1]}`).join("\n"));
+    if(f.recit)f.recit.forEach(b=>{if(b.h!==undefined)t(`### ${b.n?b.n+" · ":""}${b.k}${b.d?" · "+b.d:""} — ${b.h}\n`+(b.liste?b.liste.map(x=>"- "+x).join("\n"):(b.x||[]).join("\n\n")));else if(b.img)t(`> Images : ${ims(b.img)}\n> Légende : ${b.leg||""}`)});
+    else{(f.sections||[]).forEach(s=>t(`## ${s[0]}\n${s[1].join("\n\n")}`));t("## Galerie\n"+ims(f.galerie))}}
+  else{const o=D.ia.find(x=>x.id===id)||Object.values(D.rub).flatMap(r=>r.items).find(x=>x.id===id);
+    if(o){t("# "+o.t);if(o.d)t("Date : "+o.d);if(o.w)t("Personnalités : "+o.w);t(o.x.join("\n\n"));t("## Images\n"+ims(o.p))}
+    else{const m={affiches:D.affiches,voeux:D.edition.voeux,infotravaux:D.edition.infotravaux}[id];t("# "+id);t(ims(m||[]))}}
+  return L.join("\n")+"\n_Les nombres sont les numéros d'image du site (i/<numéro>.webp). Fichier écrit par la page d'administration._\n"}
+async function ecrire(dir,chemin,contenu){const seg=chemin.split("/");let d=dir;for(const s of seg.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
+  const h=await d.getFileHandle(seg.at(-1),{create:true}),w=await h.createWritable();await w.write(contenu);await w.close()}
+async function lire(dir,chemin){try{const seg=chemin.split("/");let d=dir;for(const s of seg.slice(0,-1))d=await d.getDirectoryHandle(s);return await (await (await d.getFileHandle(seg.at(-1))).getFile()).text()}catch(e){return""}}
+const dossierDe=id=>D.dossiers[id]||"_backoffice/pages/"+id;
+async function enregistrer(){
+  if(!MOD.size)return;const jr=$("#journalZ")||$("#page").appendChild(el("div",{id:"journalZ"},el("h2",{},"Enregistrement"),el("div",{id:"journal"})));const dit=t=>{$("#journal").textContent+=t+"\n";etat(t)};$("#journal").textContent="";
+  if(!DOSSIER&&!confirm("Le dossier FABLE_SITE n'est pas choisi : enregistrer sur le site seulement ?"))return;
+  $("#bSave").disabled=true;
+  try{
+    const garde=refs(),ajout=[...NEUF.entries()].filter(([id])=>garde.has(id)),retire=[...new Set(JOURNAL.filter(l=>l[0]==="−").map(l=>+l.match(/image (\d+)/)[1]))].filter(id=>!garde.has(id)&&!NEUF.has(id));
+    dit(`Envoi sur GitHub (branche ${BRANCHE}) : ${ajout.length} image(s) ajoutée(s), ${retire.length} retirée(s)…`);
+    const ref=await gh(`/git/ref/heads/${BRANCHE}`);if(ref.object.sha!==shaTete)throw new Error("Le site a été modifié ailleurs depuis l'ouverture de cette page. Rechargez-la (vos modifications en cours seront perdues).");
+    const base=(await gh(`/git/commits/${shaTete}`)).tree.sha,arbre=[{path:"data.js",mode:"100644",type:"blob",content:"const D = "+JSON.stringify(D)+";\n"}];
+    for(const[id,n]of ajout)for(const t of["i","s"]){const b=await gh("/git/blobs",{method:"POST",body:JSON.stringify({content:await blob64(n[t]),encoding:"base64"})});arbre.push({path:`${t}/${id}.webp`,mode:"100644",type:"blob",sha:b.sha})}
+    const SD=new Set(D.sd||[]);for(const id of retire)for(const t of SD.has(id)?["s"]:["i","s"])arbre.push({path:`${t}/${id}.webp`,mode:"100644",type:"blob",sha:null});
+    let tr;try{tr=await gh("/git/trees",{method:"POST",body:JSON.stringify({base_tree:base,tree:arbre})})}
+    catch(e){tr=await gh("/git/trees",{method:"POST",body:JSON.stringify({base_tree:base,tree:arbre.filter(x=>x.sha!==null)})});dit("(fichiers d'images retirées laissés dans le dépôt)")}
+    const pagesMod=[...MOD],c=await gh("/git/commits",{method:"POST",body:JSON.stringify({message:"Administration : "+pagesMod.join(", "),tree:tr.sha,parents:[shaTete]})});
+    await gh(`/git/refs/heads/${BRANCHE}`,{method:"PATCH",body:JSON.stringify({sha:c.sha})});shaTete=c.sha;dit("Site : enregistré.");
+    if(DOSSIER){dit("Écriture dans FABLE_SITE…");
+      for(const id of pagesMod)await ecrire(DOSSIER,dossierDe(id)+"/texte_site.md",texteDe(id));
+      for(const[id,n]of ajout)await ecrire(DOSSIER,dossierDe(n.page)+"/ajouts/"+id+"_"+n.orig.name,n.orig);
+      await ecrire(DOSSIER,"_backoffice/data.js","const D = "+JSON.stringify(D)+";\n");
+      const j=await lire(DOSSIER,"_backoffice/journal.md");await ecrire(DOSSIER,"_backoffice/journal.md",j+`\n## ${new Date().toLocaleString("fr-FR")}\nPages : ${pagesMod.join(", ")}\n${JOURNAL.map(l=>"- "+l).join("\n")}\n`);
+      dit("FABLE_SITE : enregistré (texte_site.md, ajouts/, _backoffice/).")}
+    MOD.clear();NEUF.clear();JOURNAL.length=0;menu();dit("Terminé.");
+  }catch(e){dit("ERREUR : "+(e.message||e));$("#bSave").disabled=false}
+}
+$("#bSave").onclick=enregistrer;
+$("#bDossier").onclick=async()=>{if(!window.showDirectoryPicker)return alert("Ce navigateur ne permet pas d'écrire dans un dossier : utilisez Edge ou Chrome.");
+  try{const d=await showDirectoryPicker({mode:"readwrite"});if(d.name!=="FABLE_SITE"&&!confirm(`Le dossier choisi s'appelle « ${d.name} », pas « FABLE_SITE ». Continuer ?`))return;DOSSIER=d;$("#bDossier").textContent="Dossier : "+d.name;etat(`Branche « ${BRANCHE} » · dossier « ${d.name} » prêt`)}catch(e){}};
+addEventListener("beforeunload",e=>{if(MOD.size){e.preventDefault();e.returnValue=""}});
+if(!window.__test)ecranAcces();
+</script></body></html>
