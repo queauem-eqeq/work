@@ -267,6 +267,7 @@ header,footer{padding-inline:max(var(--g),calc((100vw - var(--max))/2 + var(--g)
 .chap h2{font-size:clamp(32px,4.4vw,62px);margin-bottom:clamp(14px,2vw,24px);max-width:20ch}
 .chap p{font-size:clamp(17px,1.35vw,19px)}
 .chap .liens{display:flex;gap:14px 28px;flex-wrap:wrap;margin-top:26px}
+.suite{display:flex;justify-content:space-between;gap:18px 40px;flex-wrap:wrap;margin-top:clamp(70px,10vw,140px);padding-top:28px;padding-bottom:clamp(40px,6vw,90px);border-top:1px solid var(--trait)}
 .phase .rangs{margin-top:0}
 .liens.phase{display:flex;gap:14px 28px;flex-wrap:wrap;margin-top:-6px}
 .reperes{border-block:1px solid var(--trait);padding-block:16px;margin-bottom:clamp(24px,4vw,44px);display:grid;gap:6px}
@@ -388,6 +389,11 @@ function focus(){
   `<div class="wrap"><div class="projets">${D.focus.map(carte).join("")}</div></div>`;
 }
 const lien=l=>l[1][0]==="#"?`<a class="lien" href="${l[1]}">${esc(l[0])} →</a>`:`<a class="lien" href="${l[1]}" target="_blank" rel="noopener">${esc(l[0])} ↗</a>`;
+/* bas de page : precedent / suivant, detaches du contenu */
+function suite(L,o,lien=x=>"#"+x.id,nom=x=>x.t){
+  const i=L.indexOf(o),a=L[(i-1+L.length)%L.length],b=L[(i+1)%L.length];
+  return `<div class="wrap suite"><a class="lien" href="${lien(a)}">← Précédent : ${esc(nom(a))}</a><a class="lien" href="${lien(b)}">Suivant : ${esc(nom(b))} →</a></div>`;
+}
 /* dossier raconte en chapitres : un temps de texte, un temps d'images */
 function recit(p){
   const all=[],mob=innerWidth<700;
@@ -412,8 +418,7 @@ function recit(p){
     }
   });
   h+=`</div></div>`;
-  const L=D.focus,n=L[(L.indexOf(p)+1)%L.length];
-  h+=`<div class="wrap bloc" style="margin-top:30px"><a class="lien" href="#${n.id}">Dossier suivant : ${esc(n.t)} →</a></div>`;
+  h+=suite(D.focus,p);
   app.innerHTML=h;lier(all);vignettes();
   app.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{const c=document.getElementById(b.dataset.go);if(c)c.scrollIntoView({behavior:"smooth",block:"start"})});
 }
@@ -440,6 +445,7 @@ function focusItem(p){
   if(p.plus.aff.length)h+=`<div class="wrap bloc"><div class="tete"><h2 class="h2b">Affiches et panneaux</h2></div><div class="mur">${p.plus.aff.map((x,i)=>`<a href="#" data-lb="${a0+i}">${img(x,"Affiche")}</a>`).join("")}</div></div>`;
   if(p.plus.couv.length)h+=`<div class="wrap bloc"><div class="tete"><h2 class="h2b">Dans le Spinomag</h2></div><div class="mur">${p.plus.couv.map((x,i)=>`<a href="#" data-lb="${c0+i}">${img(x,"Couverture du Spinomag")}</a>`).join("")}</div></div>`;
   if(p.plus.films.length)h+=`<div class="wrap bloc"><div class="tete"><h2 class="h2b">En vidéo</h2></div><div class="films">${p.plus.films.map((f,i)=>film({t:f[0],y:f[1],m:"",x:""},i+1)).join("")}</div></div>`;
+  h+=suite(D.focus,p);
   app.innerHTML=h;lier(all.concat(p.bandeau||[],p.diplomes||[]));
 }
 
@@ -459,7 +465,7 @@ function edition(k){
   app.innerHTML=tete(cap,titre,lede)+
    `<div class="wrap"><div class="onglets">${E.onglets.map(o=>`<a href="#ed-${o[0]}" class="${o[0]===k?"on":""}">${esc(o[1])}</a>`).join("")}</div>
     ${k==="spinomag"?`<p class="note" style="margin:-10px 0 24px"><a class="lien" href="https://www.calameo.com/accounts/7710912" target="_blank" rel="noopener">Feuilleter sur Calaméo</a></p>`:""}
-    ${corps}</div>`;
+    ${corps}</div>`+suite(E.onglets,E.onglets.find(o=>o[0]===k),x=>"#ed-"+x[0],x=>x[1]);
   if(k==="affiches")lier(D.affiches); else if(k==="infotravaux")lier(E.infotravaux); else if(k==="voeux")lier(E.voeux);
 }
 /* ---------- photo ---------- */
@@ -489,8 +495,7 @@ function fiche(o,k){
   }else{
     h+=`<div class="wrap" style="margin-top:40px">${o.w&&o.w.toLowerCase()!==o.t.toLowerCase()?`<p class="cap" style="margin-bottom:18px">${esc(o.w)}</p>`:""}<div class="col">${o.x.slice(1).map(para).join("")}</div>${rangs(reste,1,reste.length<=4?2:0)}</div>`;
   }
-  const L=R.items,i=L.indexOf(o),n=L[(i+1)%L.length];
-  h+=`<div class="wrap bloc"><a class="lien" href="#${n.id}">Suivant : ${esc(n.t)} →</a></div>`;
+  h+=suite(R.items,o);
   app.innerHTML=h;lier(o.p);
 }
 
@@ -508,8 +513,7 @@ function iaItem(o){
   else if(o.p.length>1)h+=rangs(o.p.slice(1),1,2);
   h+=`</div>`;
   if(o.films.length)h+=`<div class="wrap bloc"><div class="tete"><h2 class="h2b">En vidéo</h2></div><div class="films">${o.films.map((f,i)=>film({t:f[0],y:f[1],m:"",x:""},i+1)).join("")}</div></div>`;
-  const L=D.ia,i=L.indexOf(o),n=L[(i+1)%L.length];
-  h+=`<div class="wrap bloc"><a class="lien" href="#${n.id}">Suivant : ${esc(n.t)} →</a></div>`;
+  h+=suite(D.ia,o);
   app.innerHTML=h;lier(o.p);
 }
 function video(){
