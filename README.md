@@ -26,8 +26,11 @@ Un dossier Focus qui porte une clé `recit` (aujourd'hui : TZCLD) s'affiche en c
 un temps de texte puis un temps d'images légendées (fonction `recit()` dans `index.html`).
 Sa source est `01_Focus\<dossier>\texte.md` et `recit.json` dans `FABLE_SITE`.
 
-## Administration (back office)
+## Administration (back office) et FABLE_SITE
 
-- `data.js` contient toutes les données du site (`const D = …`) ; `index.html` ne contient plus que la mise en page et le code.
-- `admin.html` est la page d'administration : textes et images des Focus, visites, spectacles, séries, fiches IA, murs d'images d'Édition, page d'accueil et À propos. Elle ne contient aucun secret : la clé GitHub est saisie par l'utilisateur et conservée chiffrée dans son navigateur.
-- Chaque enregistrement est un commit « Administration : … » sur `main`. Retour à l'état d'avant le back office : étiquette `avant-backoffice`.
+- `data.js` contient toutes les données du site (`const D = …`) ; `index.html` ne contient que la mise en page et le code.
+- `admin.html` est la page d'administration (elle embarque `fable.js`). Elle ne contient aucun secret : la clé GitHub est saisie par l'utilisateur et conservée chiffrée dans son navigateur.
+- **FABLE_SITE** (disque de l'utilisateur) est la référence : un dossier par page (`D.dossiers`), avec `page.md` (textes et liste ordonnée des images) et les images en haute définition. `fable.js` écrit et relit `page.md` ; `_backoffice/etat.json` relie chaque fichier à son numéro d'image.
+- Trois circuits, toujours site + FABLE_SITE ensemble : « Enregistrer » dans le back office ; « Publier depuis FABLE_SITE » après une modification à la main dans les dossiers ; une modification faite par Claude, qui régénère `page.md` avec `fable.js` et met à jour `etat.json` dans la même opération.
+- Chaque enregistrement est un commit « Administration : … » sur `main`. État d'avant le back office : branche `avant-backoffice`.
+- Hors périmètre du back office : documents à feuilleter (`D.docs`) et vidéos.

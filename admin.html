@@ -32,16 +32,195 @@ label{display:block;font-size:12px;color:var(--g);margin:10px 0 3px}
 #journal{white-space:pre-wrap;font:12px/1.5 ui-monospace,monospace;color:var(--g);margin-top:10px}
 </style></head><body>
 <div id="barre"><b>Portfolio · administration</b><span id="etat"></span>
-<button id="bDossier">Choisir le dossier FABLE_SITE</button><button id="bSave" class="go" disabled>Enregistrer</button></div>
+<button id="bDossier">Choisir le dossier FABLE_SITE</button><button id="bRelire" disabled title="Relit les dossiers de FABLE_SITE et publie ce qui a changé">Publier depuis FABLE_SITE</button><button id="bSave" class="go" disabled>Enregistrer</button></div>
 <div id="corps"><div id="menu"></div><div id="page"><p style="color:var(--g)">Choisissez une page à gauche.</p></div></div>
 <div id="voile"><div id="acces"></div></div>
+<script>
+/* Format des pages dans FABLE_SITE : un fichier page.md par page, lisible et modifiable à la main.
+   Le même code écrit le fichier (depuis les données du site) et le relit (vers les données du site).
+   Utilisé par admin.html dans le navigateur et par les scripts de vérification sous Node. */
+(function (racine) {
+  "use strict";
+  const SEP = " | ";
+  const AIDE = "<!-- Fichier de référence de cette page du site. Les lignes « ## » et « Mot : » sont des repères : ne pas les renommer.\n     Une ligne vide sépare deux paragraphes. Une image = une ligne « - nom-du-fichier | légende ». -->";
+
+  // ---------- pages du périmètre ----------
+  function pages(D) {
+    const L = [{ id: "accueil", t: "Page d'accueil", g: "Général", type: "accueil" }, { id: "apropos", t: "À propos", g: "Général", type: "apropos" }];
+    D.focus.forEach(f => L.push({ id: f.id, t: f.t, g: "Focus", type: f.recit ? "recit" : "focus" }));
+    for (const k of Object.keys(D.rub)) D.rub[k].items.forEach(o => L.push({ id: o.id, t: o.t, g: D.rub[k].label, type: "fiche", rub: k }));
+    D.ia.forEach(o => L.push({ id: o.id, t: o.t, g: "IA et automatisation", type: "ia" }));
+    [["affiches", "Affiches"], ["voeux", "Cartes de vœux"], ["infotravaux", "Infos travaux"]].forEach(m => L.push({ id: m[0], t: m[1], g: "Édition : murs d'images", type: "mur" }));
+    return L;
+  }
+  function objet(D, id) {
+    if (id === "accueil") return D.accueil;
+    if (id === "apropos") return D.apropos;
+    return D.focus.find(x => x.id === id) || D.ia.find(x => x.id === id) || Object.values(D.rub).flatMap(r => r.items).find(x => x.id === id) || null;
+  }
+  const mur = (D, id) => ({ affiches: D.affiches, voeux: D.edition.voeux, infotravaux: D.edition.infotravaux })[id];
+  function poseMur(D, id, a) { if (id === "affiches") D.affiches = a; else D.edition[id] = a; }
+
+  // ---------- écriture ----------
+  const sec = (nom, corps, ...args) => "## " + [nom, ...args].join(SEP) + "\n" + corps.replace(/\s+$/, "") + "\n";
+  const paras = a => (a || []).join("\n\n");
+  const puces = a => (a || []).map(x => "- " + x).join("\n");
+  const paires = a => (a || []).map(x => "- " + x.join(SEP)).join("\n");
+
+  function ecrire(D, id, nom) {            // nom(idImage) → nom du fichier dans le dossier de la page
+    const p = pages(D).find(x => x.id === id); if (!p) throw new Error("Page inconnue : " + id);
+    const imgs = a => (a || []).map(x => "- " + nom(x[0]) + (x[3] ? SEP + x[3] : "")).join("\n");
+    const S = [], meta = [];
+    let titre = p.t;
+    if (p.type === "accueil") {
+      const A = D.accueil;
+      S.push(sec("Métiers", puces(A.metiers)), sec("Phrase d'introduction", A.phrase), sec("Trois colonnes", paires(A.trois)));
+      D.heroSets.forEach((h, n) => S.push(sec("Images d'ouverture", imgs(h), String(n + 1))));
+    } else if (p.type === "apropos") {
+      const A = D.apropos, bl = (nomS, L) => L.forEach(e => S.push(sec(nomS, [e.p || "", puces(e.li), e.note ? "Note : " + e.note : ""].filter(Boolean).join("\n\n"), e.d || "", e.t || "")));
+      S.push(sec("Chapô", A.chapo)); bl("Expérience", A.exp); bl("Formation", A.formation);
+      S.push(sec("Compétences", puces(A.competences)), sec("Et aussi", puces(A.aussi)));
+    } else if (p.type === "mur") {
+      S.push(sec("Images", imgs(mur(D, id))));
+    } else if (p.type === "fiche") {
+      const o = objet(D, id); titre = o.t;
+      meta.push(["Date", o.d || ""], ["Personnalités", o.w || ""]);
+      S.push(sec("Texte", paras(o.x)), sec("Images", imgs(o.p)));
+    } else if (p.type === "ia") {
+      const o = objet(D, id); titre = o.t;
+      meta.push(["Catégorie", o.k || ""], ["Année", o.d || ""]);
+      S.push(sec("Texte", paras(o.x)), sec("Liens", paires(o.liens)), sec("Films", paires(o.films)), sec("Images", imgs(o.p)));
+    } else {
+      const f = objet(D, id); titre = f.t;
+      meta.push(["Bandeau", f.k || ""]);
+      S.push(sec("Chapô", f.c || ""), sec("Chiffres clés", paires(f.chiffres)), sec("Image d'ouverture", f.hero ? imgs([f.hero]) : ""));
+      if (p.type === "recit") f.recit.forEach(b => {
+        if (b.img) S.push(sec("Images", (b.leg ? "Légende : " + b.leg + "\n" : "") + imgs(b.img), b.pg ? "pages" : b.mur ? "mosaïque" : "rangée"));
+        else if (b.films) S.push(sec("Films", paires(b.films)));
+        else if (b.liens_seuls) S.push(sec("Liens", paires(b.liens_seuls)));
+        else {
+          S.push(sec(b.liste ? "Puces" : "Texte", b.liste ? puces(b.liste) : paras(b.x), b.n || "", b.k || "", b.d || "", b.h || ""));
+          if (b.liens) S.push(sec("Liens du texte", paires(b.liens)));
+        }
+      });
+      else {
+        if (f.poeme) S.push(sec("Poème", f.poeme.join("\n")));
+        (f.sections || []).forEach(s => S.push(sec("Section", paras(s[1]), s[0])));
+        if (f.bandeau) S.push(sec("Images : bandeau", imgs(f.bandeau)));
+        if (f.diplomes) S.push(sec("Images : diplômes", imgs(f.diplomes)));
+        S.push(sec("Images : galerie", imgs(f.galerie)));
+      }
+    }
+    return "# " + titre + "\n" + AIDE + "\n\n" + meta.map(m => m[0] + " : " + m[1] + "\n").join("") + (meta.length ? "\n" : "") + S.join("\n");
+  }
+
+  // ---------- lecture ----------
+  function decoupe(texte) {
+    const lignes = texte.replace(/^﻿/, "").replace(/\r\n?/g, "\n").replace(/<!--[\s\S]*?-->/g, "").split("\n");
+    const doc = { titre: "", meta: {}, sections: [] }; let cour = null;
+    for (const l of lignes) {
+      if (l.startsWith("## ")) { const a = l.slice(3).split(SEP).map(x => x.trim()); cour = { nom: a[0], args: a.slice(1), lignes: [] }; doc.sections.push(cour); }
+      else if (cour) cour.lignes.push(l);
+      else if (l.startsWith("# ")) doc.titre = l.slice(2).trim();
+      else { const m = l.match(/^([^:]{2,30}?) ?: ?(.*)$/); if (m) doc.meta[m[1].trim()] = m[2].trim(); }
+    }
+    doc.sections.forEach(s => s.corps = s.lignes.join("\n").trim());
+    return doc;
+  }
+  const lParas = c => c.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  const lPuces = c => c.split("\n").filter(l => /^- /.test(l)).map(l => l.slice(2).trim());
+  const lPaires = c => lPuces(c).map(l => { const a = l.split(SEP); return [a[0].trim(), a.slice(1).join(SEP).trim()]; });
+
+  /* lire : renvoie { erreurs:[…], neufs:[…] } et modifie D.
+     image(fichier) → [id,w,h] si le fichier est connu, sinon null (image nouvelle : une entrée {neuf:fichier, leg} est posée, à traiter par l'appelant). */
+  function lire(D, id, texte, image) {
+    const p = pages(D).find(x => x.id === id); if (!p) throw new Error("Page inconnue : " + id);
+    const doc = decoupe(texte), err = [], neufs = [];
+    const lImgs = (c, sansLegende) => lPuces(c.split("\n").filter(l => !/^Légende ?:/.test(l)).join("\n")).map(l => {
+      const a = l.split(SEP), f = a[0].trim(), leg = a.slice(1).join(SEP).trim(), k = image(f);
+      if (!k) { const e = { neuf: f, leg: sansLegende ? "" : leg }; neufs.push(e); return e; }
+      return leg && !sansLegende ? [k[0], k[1], k[2], leg] : [k[0], k[1], k[2]];
+    });
+    const S = n => doc.sections.filter(s => s.nom === n), un = n => { const a = S(n); if (!a.length) err.push("Section « " + n + " » absente : contenu conservé tel qu'il est sur le site."); return a[0]; };
+    const si = (n, f) => { const s = un(n); if (s) f(s.corps, s); };
+    if (p.type === "accueil") {
+      const A = D.accueil;
+      si("Métiers", c => A.metiers = lPuces(c)); si("Phrase d'introduction", c => A.phrase = c.replace(/\s*\n\s*/g, " ")); si("Trois colonnes", c => A.trois = lPaires(c));
+      const h = S("Images d'ouverture"); if (h.length) D.heroSets = h.map(s => lImgs(s.corps, true)); else err.push("Aucun jeu d'images d'ouverture : conservés.");
+    } else if (p.type === "apropos") {
+      const A = D.apropos, bl = n => S(n).map(s => {
+        const L = s.corps.split("\n"), note = L.filter(l => /^Note ?:/.test(l)).map(l => l.replace(/^Note ?: ?/, "")).join(" ");
+        const e = { d: s.args[0] || "", t: s.args[1] || "", p: L.filter(l => !/^- /.test(l) && !/^Note ?:/.test(l)).join("\n").trim().replace(/\s*\n\s*/g, " ") };
+        const li = lPuces(s.corps); e.li = li; e.note = note; return e;
+      });
+      si("Chapô", c => A.chapo = c.replace(/\s*\n\s*/g, " "));
+      if (S("Expérience").length) A.exp = bl("Expérience"); if (S("Formation").length) A.formation = bl("Formation");
+      si("Compétences", c => A.competences = lPuces(c)); si("Et aussi", c => A.aussi = lPuces(c));
+    } else if (p.type === "mur") {
+      si("Images", c => poseMur(D, id, lImgs(c)));
+    } else if (p.type === "fiche" || p.type === "ia") {
+      const o = objet(D, id); if (doc.titre) o.t = doc.titre;
+      const M = (k, c) => { if (k in doc.meta) o[c] = doc.meta[k]; };
+      if (p.type === "fiche") { M("Date", "d"); M("Personnalités", "w"); } else { M("Catégorie", "k"); M("Année", "d"); si("Liens", c => o.liens = lPaires(c)); si("Films", c => o.films = lPaires(c)); }
+      si("Texte", c => o.x = lParas(c)); si("Images", c => o.p = lImgs(c));
+    } else {
+      const f = objet(D, id); if (doc.titre) f.t = doc.titre;
+      if ("Bandeau" in doc.meta) f.k = doc.meta.Bandeau;
+      si("Chapô", c => f.c = c.replace(/\s*\n\s*/g, " ")); si("Chiffres clés", c => f.chiffres = lPaires(c));
+      si("Image d'ouverture", c => { const a = lImgs(c, true); if (a.length) f.hero = a[a.length - 1]; });
+      if (p.type === "recit") {
+        const R = []; let av = false;
+        doc.sections.forEach(s => {
+          if (s.nom === "Chapô" || s.nom === "Chiffres clés" || s.nom === "Image d'ouverture") { if (R.length) av = true; return; }
+          if (s.nom === "Images") {
+            const b = { img: lImgs(s.corps), leg: (s.corps.split("\n").find(l => /^Légende ?:/.test(l)) || "").replace(/^Légende ?: ?/, "") };
+            if (/page/i.test(s.args[0] || "")) b.pg = 1; else if (/mosa/i.test(s.args[0] || "")) b.mur = 1; R.push(b);
+          } else if (s.nom === "Films") R.push({ films: lPaires(s.corps) });
+          else if (s.nom === "Liens") R.push({ liens_seuls: lPaires(s.corps) });
+          else if (s.nom === "Liens du texte") { const d = R[R.length - 1]; if (d && "h" in d) d.liens = lPaires(s.corps); else err.push("« Liens du texte » sans texte juste avant : ignoré."); }
+          else if (s.nom === "Texte" || s.nom === "Puces") {
+            const b = { n: s.args[0] || "", k: s.args[1] || "" }; if (s.args[2]) b.d = s.args[2]; b.h = s.args.slice(3).join(SEP);
+            if (s.nom === "Puces") b.liste = lPuces(s.corps); else b.x = lParas(s.corps); R.push(b);
+          } else err.push("Section « " + s.nom + " » non reconnue : ignorée.");
+        });
+        if (av) err.push("Chapô, chiffres clés et image d'ouverture doivent rester avant le récit.");
+        if (R.length) f.recit = R; else err.push("Récit vide : conservé tel qu'il est sur le site.");
+      } else {
+        if (f.poeme && S("Poème").length) f.poeme = S("Poème")[0].corps.split("\n").map(x => x.trim()).filter(Boolean);
+        const ss = S("Section"); if (ss.length) f.sections = ss.map(s => [s.args.join(SEP), lParas(s.corps)]);
+        if (f.bandeau) si("Images : bandeau", c => f.bandeau = lImgs(c, true));
+        if (f.diplomes) si("Images : diplômes", c => f.diplomes = lImgs(c, true));
+        si("Images : galerie", c => f.galerie = lImgs(c, true));
+      }
+    }
+    return { erreurs: err, neufs };
+  }
+
+  // identifiants des images d'une page, dans l'ordre du fichier (doublons retirés)
+  function images(D, id) { const L = []; ecrire(D, id, i => { if (!L.includes(i)) L.push(i); return ""; }); return L; }
+  // listes d'images d'une page (pour y ranger une image déposée dans le dossier sans être citée dans page.md)
+  function derniereListe(D, id) {
+    const p = pages(D).find(x => x.id === id), o = objet(D, id);
+    if (p.type === "accueil") return D.heroSets[D.heroSets.length - 1];
+    if (p.type === "mur") return mur(D, id);
+    if (p.type === "fiche" || p.type === "ia") return o.p;
+    if (p.type === "recit") { const b = o.recit.filter(x => x.img); return b.length ? b[b.length - 1].img : null; }
+    if (p.type === "focus") return o.galerie;
+    return null;
+  }
+  // texte canonique d'une valeur (clés triées) : pour comparer deux versions sans tenir compte de l'ordre des clés
+  const canon = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.keys(v).sort().reduce((r, x) => (r[x] = v[x], r), {}) : v);
+  const api = { pages, objet, ecrire, lire, images, derniereListe, decoupe, canon };
+  if (typeof module !== "undefined" && module.exports) module.exports = api; else racine.FABLE = api;
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
 <script>
 "use strict";
 const DEPOT="queauem-eqeq/work", API="https://api.github.com/repos/"+DEPOT;
 const BRANCHE=new URLSearchParams(location.search).get("branche")||"main";
 const RAW=`https://raw.githubusercontent.com/${DEPOT}/${BRANCHE}/`;
 const $=s=>document.querySelector(s), el=(t,a={},...k)=>{const e=document.createElement(t);for(const[n,v]of Object.entries(a)){if(n==="on")for(const[ev,f]of Object.entries(v))e.addEventListener(ev,f);else if(n==="html")e.innerHTML=v;else if(v!==false&&v!=null)e.setAttribute(n,v===true?"":v)}k.flat().forEach(c=>e.append(c));return e};
-let D=null,JETON="",DOSSIER=null,shaTete="";
+let D=null,JETON="",DOSSIER=null,shaTete="",ETAT={v:1,pages:{}},REFS0=new Set();
 const MOD=new Set(),NEUF=new Map(),JOURNAL=[];   // pages modifiées · images ajoutées (id → {i,s,orig}) · opérations
 const etat=t=>$("#etat").textContent=t;
 
@@ -83,15 +262,12 @@ async function demarrer(){
     const f=await gh(`/contents/data.js?ref=${shaTete}`,{});
     const txt=f.content?dec.decode(ub64(f.content.replace(/\n/g,""))):await (await fetch(f.download_url)).text();
     D=JSON.parse(txt.slice(txt.indexOf("{"),txt.lastIndexOf("}")+1));
-    $("#voile").hidden=true;menu();etat(`Branche « ${BRANCHE} » · dossier FABLE_SITE non choisi`);
+    REFS0=refs();$("#voile").hidden=true;menu();if(!DOSSIER)etat(`Branche « ${BRANCHE} » · dossier FABLE_SITE non choisi`);
   }catch(e){JETON="";ecranAcces(String(e.message||e))}
 }
 
 /* ---------- pages ---------- */
-function pages(){
-  const L=[["Général",[["accueil","Page d'accueil"],["apropos","À propos"]]],["Focus",D.focus.map(f=>[f.id,f.t])]];
-  for(const k of Object.keys(D.rub))L.push([D.rub[k].label,D.rub[k].items.map(o=>[o.id,o.t])]);
-  L.push(["IA et automatisation",D.ia.map(o=>[o.id,o.t])],["Édition : murs d'images",[["affiches","Affiches"],["voeux","Cartes de vœux"],["infotravaux","Infos travaux"]]]);return L}
+function pages(){const G=[];for(const p of FABLE.pages(D)){let g=G.find(x=>x[0]===p.g);if(!g)G.push(g=[p.g,[]]);g[1].push([p.id,p.t])}return G}
 let COUR=null;
 function menu(){const m=$("#menu");m.innerHTML="";for(const[t,l]of pages()){m.append(el("h4",{},t));for(const[id,n]of l)m.append(el("a",{href:"#"+id,class:(id===COUR?"on ":"")+(MOD.has(id)?"mod":"")},n))}}
 addEventListener("hashchange",()=>ouvrir(location.hash.slice(1)));
@@ -127,8 +303,8 @@ function images(arr,lib,avecLegende){
   dessiner();return[el("label",{},lib),z,el("div",{class:"depot"},"Glissez des images ici pour en ajouter · glissez une vignette pour la déplacer · × pour la retirer")]}
 async function reduire(bmp,max,q){const r=Math.min(1,max/Math.max(bmp.width,bmp.height)),w=Math.round(bmp.width*r),h=Math.round(bmp.height*r),c=new OffscreenCanvas(w,h);
   const x=c.getContext("2d");x.imageSmoothingQuality="high";x.drawImage(bmp,0,0,w,h);return{blob:await c.convertToBlob({type:"image/webp",quality:q}),w,h}}
-async function preparer(f){const bmp=await createImageBitmap(f),g=await reduire(bmp,1600,.84),s=await reduire(bmp,1000,.8),id=D.n++;
-  NEUF.set(id,{i:g.blob,s:s.blob,orig:f,url:URL.createObjectURL(s.blob),page:COUR});return[id,g.w,g.h]}
+async function preparer(f,data=D,page=COUR){const bmp=await createImageBitmap(f),g=await reduire(bmp,1600,.84),s=await reduire(bmp,1000,.8),id=data.n++;
+  NEUF.set(id,{i:g.blob,s:s.blob,orig:f,url:URL.createObjectURL(s.blob),page});return[id,g.w,g.h]}
 
 /* formulaires par type de page */
 function ouvrir(id){
@@ -160,51 +336,104 @@ function ouvrir(id){
   P.append(el("p",{},"Page inconnue."));
 }
 
-/* ---------- enregistrement ---------- */
-const refs=()=>{const S=new Set(),v=o=>{if(Array.isArray(o)){if(o.length>=3&&typeof o[0]==="number"&&typeof o[1]==="number"&&typeof o[2]==="number")S.add(o[0]);o.forEach(v)}else if(o&&typeof o==="object")Object.values(o).forEach(v)};v(D);return S};
+/* ---------- enregistrement : le site (GitHub) puis FABLE_SITE, toujours les deux ---------- */
+const refs=()=>{const S=new Set(),v=o=>{if(Array.isArray(o)){if(o.length>=3&&typeof o[0]==="number"&&typeof o[1]==="number"&&typeof o[2]==="number")S.add(o[0]);o.forEach(v)}else if(o&&typeof o==="object")for(const k of Object.keys(o))if(k!=="sd"&&k!=="docs")v(o[k])};v(D);for(const d of Object.values(D.docs||{}))v(d);return S};
 const blob64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result.split(",")[1]);f.readAsDataURL(b)});
-function texteDe(id){   // version lisible, écrite dans FABLE_SITE
-  const L=[],t=x=>L.push(x,""),f=D.focus.find(x=>x.id===id),ims=a=>a.map(p=>p[0]+(p[3]?` (${p[3]})`:"")).join(", ");
-  if(id==="accueil"){const A=D.accueil;t("# Page d'accueil");t("## Métiers\n"+A.metiers.map(x=>"- "+x).join("\n"));t("## Phrase d'introduction\n"+A.phrase);A.trois.forEach(x=>t(`## ${x[0]}\n${x[1]}`));D.heroSets.forEach((h,n)=>t(`## Images d'ouverture, jeu ${n+1}\n${ims(h)}`))}
-  else if(id==="apropos"){const A=D.apropos,b=e=>t(`### ${e.d} — ${e.t}\n${e.p||""}${(e.li||[]).map(x=>"\n- "+x).join("")}${e.note?"\n"+e.note:""}`);t("# À propos");t(A.chapo);t("## Expérience");A.exp.forEach(b);t("## Formation");A.formation.forEach(b);t("## Compétences\n"+A.competences.map(x=>"- "+x).join("\n"));t("## Et aussi\n"+A.aussi.map(x=>"- "+x).join("\n"))}
-  else if(f){t("# "+f.t);t("## Bandeau\n"+f.k);t("## Chapô\n"+f.c);t("## Chiffres clés\n"+f.chiffres.map(c=>`- **${c[0]}** — ${c[1]}`).join("\n"));
-    if(f.recit)f.recit.forEach(b=>{if(b.h!==undefined)t(`### ${b.n?b.n+" · ":""}${b.k}${b.d?" · "+b.d:""} — ${b.h}\n`+(b.liste?b.liste.map(x=>"- "+x).join("\n"):(b.x||[]).join("\n\n")));else if(b.img)t(`> Images : ${ims(b.img)}\n> Légende : ${b.leg||""}`)});
-    else{(f.sections||[]).forEach(s=>t(`## ${s[0]}\n${s[1].join("\n\n")}`));t("## Galerie\n"+ims(f.galerie))}}
-  else{const o=D.ia.find(x=>x.id===id)||Object.values(D.rub).flatMap(r=>r.items).find(x=>x.id===id);
-    if(o){t("# "+o.t);if(o.d)t("Date : "+o.d);if(o.w)t("Personnalités : "+o.w);t(o.x.join("\n\n"));t("## Images\n"+ims(o.p))}
-    else{const m={affiches:D.affiches,voeux:D.edition.voeux,infotravaux:D.edition.infotravaux}[id];t("# "+id);t(ims(m||[]))}}
-  return L.join("\n")+"\n_Les nombres sont les numéros d'image du site (i/<numéro>.webp). Fichier écrit par la page d'administration._\n"}
 async function ecrire(dir,chemin,contenu){const seg=chemin.split("/");let d=dir;for(const s of seg.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
   const h=await d.getFileHandle(seg.at(-1),{create:true}),w=await h.createWritable();await w.write(contenu);await w.close()}
 async function lire(dir,chemin){try{const seg=chemin.split("/");let d=dir;for(const s of seg.slice(0,-1))d=await d.getDirectoryHandle(s);return await (await (await d.getFileHandle(seg.at(-1))).getFile()).text()}catch(e){return""}}
+async function dirDe(chemin,creer){let d=DOSSIER;for(const s of chemin.split("/"))d=await d.getDirectoryHandle(s,{create:!!creer});return d}
+async function lister(d){const L={};for await(const[n,h]of d.entries())if(h.kind==="file"){const f=await h.getFile();L[n]={f,t:f.size,m:f.lastModified}}return L}
 const dossierDe=id=>D.dossiers[id]||"_backoffice/pages/"+id;
+const EXT=/\.(jpe?g|png|webp|gif|avif|bmp)$/i,propre=n=>n.normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9._-]+/g,"-").slice(-60);
+const idDuNom=n=>{const m=n.match(/(?:^|_)i(\d+)[._]/);return m?+m[1]:null};
+function dimsDe(data,id){const M=new Map(),v=o=>{if(Array.isArray(o)){if(o.length>=3&&typeof o[0]==="number"&&typeof o[1]==="number"&&typeof o[2]==="number"){if(!M.has(o[0]))M.set(o[0],[o[0],o[1],o[2]])}else o.forEach(v)}else if(o&&typeof o==="object")for(const k of Object.keys(o))if(k!=="sd")v(o[k])};
+  if(id==="accueil")v(data.heroSets);else v(FABLE.objet(data,id)||{affiches:data.affiches,voeux:data.edition.voeux,infotravaux:data.edition.infotravaux}[id]);v(data);return M}
+
+// met le dossier d'une page à l'image du site : page.md, une image par image affichée, les retirées en _archives
+async function synchroDossier(id,sha){
+  const ch=dossierDe(id),d=await dirDe(ch,true),E=ETAT.pages[id]=ETAT.pages[id]||{fichiers:{}},F=E.fichiers,pres=await lister(d),ids=FABLE.images(D,id),parId={},SD=new Set(D.sd||[]);
+  for(const n of Object.keys(pres))if(EXT.test(n)&&!F[n]&&idDuNom(n)!=null)F[n]={id:idDuNom(n)};
+  for(const[n,v]of Object.entries(F)){if(!pres[n]&&!(NEUF.get(v.id)||{}).fichier)delete F[n];else if(!(v.id in parId))parId[v.id]=n}
+  for(const i of ids){
+    const neuf=NEUF.get(i);
+    if(neuf&&neuf.fichier){for(const[n,v]of Object.entries(F))if(n===neuf.fichier||v.id===i)delete F[n];F[neuf.fichier]={id:i};parId[i]=neuf.fichier;continue}
+    if(parId[i])continue;
+    let nom,contenu;
+    if(neuf){nom=`i${i}_${propre(neuf.orig.name)}`;contenu=neuf.orig}
+    else{const r=await fetch(`https://raw.githubusercontent.com/${DEPOT}/${sha}/${SD.has(i)?"s":"i"}/${i}.webp`);if(!r.ok)continue;nom=`i${i}.webp`;contenu=await r.blob()}
+    await ecrire(d,nom,contenu);F[nom]={id:i};parId[i]=nom}
+  for(const[n,v]of Object.entries(F))if(!ids.includes(v.id)){if(pres[n]){await ecrire(DOSSIER,"_archives/retirees/"+ch+"/"+n,pres[n].f);await d.removeEntry(n)}delete F[n]}
+  await ecrire(d,"page.md",FABLE.ecrire(D,id,i=>parId[i]||`i${i}.webp`));
+  const ap=await lister(d);for(const[n,v]of Object.entries(F))if(ap[n]){v.t=ap[n].t;v.m=ap[n].m}
+}
 async function enregistrer(){
-  if(!MOD.size)return;const jr=$("#journalZ")||$("#page").appendChild(el("div",{id:"journalZ"},el("h2",{},"Enregistrement"),el("div",{id:"journal"})));const dit=t=>{$("#journal").textContent+=t+"\n";etat(t)};$("#journal").textContent="";
-  if(!DOSSIER&&!confirm("Le dossier FABLE_SITE n'est pas choisi : enregistrer sur le site seulement ?"))return;
+  if(!MOD.size)return;
+  if(!DOSSIER){alert("Choisissez d'abord le dossier FABLE_SITE (bouton en haut) : le site et le dossier s'enregistrent ensemble.");return}
+  $("#journalZ")||$("#page").appendChild(el("div",{id:"journalZ"},el("h2",{},"Enregistrement"),el("div",{id:"journal"})));const dit=t=>{$("#journal").textContent+=t+"\n";etat(t)};$("#journal").textContent="";
   $("#bSave").disabled=true;
   try{
-    const garde=refs(),ajout=[...NEUF.entries()].filter(([id])=>garde.has(id)),retire=[...new Set(JOURNAL.filter(l=>l[0]==="−").map(l=>+l.match(/image (\d+)/)[1]))].filter(id=>!garde.has(id)&&!NEUF.has(id));
-    dit(`Envoi sur GitHub (branche ${BRANCHE}) : ${ajout.length} image(s) ajoutée(s), ${retire.length} retirée(s)…`);
+    const garde=refs(),ajout=[...NEUF.entries()].filter(([id])=>garde.has(id)),retire=[...REFS0].filter(id=>!garde.has(id)),SD=new Set(D.sd||[]);
+    dit(`Envoi sur le site (branche ${BRANCHE}) : ${ajout.length} image(s) ajoutée(s), ${retire.length} retirée(s)…`);
     const ref=await gh(`/git/ref/heads/${BRANCHE}`);if(ref.object.sha!==shaTete)throw new Error("Le site a été modifié ailleurs depuis l'ouverture de cette page. Rechargez-la (vos modifications en cours seront perdues).");
     const base=(await gh(`/git/commits/${shaTete}`)).tree.sha,arbre=[{path:"data.js",mode:"100644",type:"blob",content:"const D = "+JSON.stringify(D)+";\n"}];
     for(const[id,n]of ajout)for(const t of["i","s"]){const b=await gh("/git/blobs",{method:"POST",body:JSON.stringify({content:await blob64(n[t]),encoding:"base64"})});arbre.push({path:`${t}/${id}.webp`,mode:"100644",type:"blob",sha:b.sha})}
-    const SD=new Set(D.sd||[]);for(const id of retire)for(const t of SD.has(id)?["s"]:["i","s"])arbre.push({path:`${t}/${id}.webp`,mode:"100644",type:"blob",sha:null});
+    for(const id of retire)for(const t of SD.has(id)?["s"]:["i","s"])arbre.push({path:`${t}/${id}.webp`,mode:"100644",type:"blob",sha:null});
     let tr;try{tr=await gh("/git/trees",{method:"POST",body:JSON.stringify({base_tree:base,tree:arbre})})}
     catch(e){tr=await gh("/git/trees",{method:"POST",body:JSON.stringify({base_tree:base,tree:arbre.filter(x=>x.sha!==null)})});dit("(fichiers d'images retirées laissés dans le dépôt)")}
     const pagesMod=[...MOD],c=await gh("/git/commits",{method:"POST",body:JSON.stringify({message:"Administration : "+pagesMod.join(", "),tree:tr.sha,parents:[shaTete]})});
-    await gh(`/git/refs/heads/${BRANCHE}`,{method:"PATCH",body:JSON.stringify({sha:c.sha})});shaTete=c.sha;dit("Site : enregistré.");
-    if(DOSSIER){dit("Écriture dans FABLE_SITE…");
-      for(const id of pagesMod)await ecrire(DOSSIER,dossierDe(id)+"/texte_site.md",texteDe(id));
-      for(const[id,n]of ajout)await ecrire(DOSSIER,dossierDe(n.page)+"/ajouts/"+id+"_"+n.orig.name,n.orig);
-      await ecrire(DOSSIER,"_backoffice/data.js","const D = "+JSON.stringify(D)+";\n");
-      const j=await lire(DOSSIER,"_backoffice/journal.md");await ecrire(DOSSIER,"_backoffice/journal.md",j+`\n## ${new Date().toLocaleString("fr-FR")}\nPages : ${pagesMod.join(", ")}\n${JOURNAL.map(l=>"- "+l).join("\n")}\n`);
-      dit("FABLE_SITE : enregistré (texte_site.md, ajouts/, _backoffice/).")}
-    MOD.clear();NEUF.clear();JOURNAL.length=0;menu();dit("Terminé.");
+    await gh(`/git/refs/heads/${BRANCHE}`,{method:"PATCH",body:JSON.stringify({sha:c.sha})});const avant=shaTete;shaTete=c.sha;dit("Site : enregistré.");
+    dit("Écriture dans FABLE_SITE…");
+    for(const id of pagesMod){try{await synchroDossier(id,avant)}catch(e){dit("  "+id+" : "+(e.message||e))}}
+    await ecrire(DOSSIER,"_backoffice/etat.json",JSON.stringify(ETAT));
+    await ecrire(DOSSIER,"_backoffice/data.js","const D = "+JSON.stringify(D)+";\n");
+    const j=await lire(DOSSIER,"_backoffice/journal.md");await ecrire(DOSSIER,"_backoffice/journal.md",j+`\n## ${new Date().toLocaleString("fr-FR")}\nPages : ${pagesMod.join(", ")}\n${JOURNAL.map(l=>"- "+l).join("\n")}\n`);
+    dit("FABLE_SITE : enregistré (page.md et images des pages modifiées).");
+    MOD.clear();NEUF.clear();JOURNAL.length=0;REFS0=refs();menu();dit("Terminé. Le site en ligne est à jour dans une à deux minutes.");
   }catch(e){dit("ERREUR : "+(e.message||e));$("#bSave").disabled=false}
 }
 $("#bSave").onclick=enregistrer;
+
+/* ---------- publier depuis FABLE_SITE : relire les dossiers, montrer les écarts, puis enregistrer ---------- */
+const contenu=(data,id)=>FABLE.canon(id==="accueil"?[data.accueil,data.heroSets]:id==="apropos"?data.apropos:FABLE.objet(data,id)||{affiches:data.affiches,voeux:data.edition.voeux,infotravaux:data.edition.infotravaux}[id]);
+async function remplaceNeufs(o,f){if(Array.isArray(o)){for(let n=0;n<o.length;n++){const e=o[n];if(e&&!Array.isArray(e)&&typeof e==="object"&&"neuf"in e){const r=await f(e);if(r)o[n]=r;else{o.splice(n,1);n--}}else await remplaceNeufs(e,f)}}else if(o&&typeof o==="object")for(const k of Object.keys(o)){const e=o[k];if(e&&!Array.isArray(e)&&typeof e==="object"&&"neuf"in e){const r=await f(e);if(r)o[k]=r;else delete o[k]}else await remplaceNeufs(e,f)}}
+async function relire(){
+  if(!DOSSIER)return alert("Choisissez d'abord le dossier FABLE_SITE.");
+  if(MOD.size)return alert("Enregistrez d'abord vos modifications en cours (ou rechargez la page pour les abandonner).");
+  COUR=null;menu();const P=$("#page");P.innerHTML="";P.append(el("h1",{},"Publier depuis FABLE_SITE"),el("p",{class:"depot",id:"avance"},"Lecture des dossiers…"));
+  const Dn=JSON.parse(JSON.stringify(D)),rapport=[],prov=new Map();
+  for(const p of FABLE.pages(D)){
+    $("#avance").textContent="Lecture : "+p.t;const ch=D.dossiers[p.id];if(!ch)continue;let d;try{d=await dirDe(ch)}catch(e){rapport.push([p,["dossier introuvable : page laissée telle quelle"],false]);continue}
+    const pres=await lister(d);if(!pres["page.md"]){rapport.push([p,["page.md absent : page laissée telle quelle"],false]);continue}
+    const F=(ETAT.pages[p.id]||{fichiers:{}}).fichiers,dims=dimsDe(D,p.id),ch2=[],cites=new Set();
+    const connu=n=>{const e=F[n]||(idDuNom(n)!=null&&dims.has(idDuNom(n))?{id:idDuNom(n)}:null);if(!e||!pres[n])return null;if(e.t!=null&&(e.t!==pres[n].t||e.m!==pres[n].m))return null;return dims.get(e.id)||null};
+    const r=FABLE.lire(Dn,p.id,await pres["page.md"].f.text(),n=>{cites.add(n);return connu(n)});
+    r.erreurs.forEach(e=>ch2.push("⚠ "+e));
+    const ajoute=async(n,leg)=>{try{const k=await preparer(pres[n].f,Dn,p.id);NEUF.get(k[0]).fichier=n;prov.set(k[0],1);return leg?[...k,leg]:k}catch(e){ch2.push("⚠ image illisible, ignorée : "+n);return null}};
+    const racine=p.id==="accueil"?Dn.heroSets:p.type==="mur"?{affiches:Dn.affiches,voeux:Dn.edition.voeux,infotravaux:Dn.edition.infotravaux}[p.id]:FABLE.objet(Dn,p.id);
+    await remplaceNeufs(racine,async e=>{if(!pres[e.neuf]){ch2.push("image retirée (fichier absent du dossier) : "+e.neuf);return null}ch2.push((F[e.neuf]?"image remplacée : ":"image ajoutée : ")+e.neuf);return ajoute(e.neuf,e.leg)});
+    for(const n of Object.keys(pres))if(EXT.test(n)&&!cites.has(n)&&!F[n]&&idDuNom(n)==null){const L=FABLE.derniereListe(Dn,p.id);if(!L)continue;const k=await ajoute(n);if(k){L.push(k);ch2.push("image ajoutée en fin de page (non citée dans page.md) : "+n)}}
+    if(contenu(Dn,p.id)!==contenu(D,p.id)){if(!ch2.some(x=>x[0]!=="⚠"))ch2.push("texte, légendes ou ordre modifiés");rapport.push([p,ch2,true])}else if(ch2.length)rapport.push([p,ch2,false]);
+  }
+  const mod=rapport.filter(r=>r[2]);P.innerHTML="";P.append(el("h1",{},"Publier depuis FABLE_SITE"));
+  if(!rapport.length)return P.append(el("p",{},"Aucun écart : les dossiers et le site disent la même chose."));
+  rapport.forEach(([p,L,m])=>P.append(el("div",{class:"bloc"},el("div",{class:"tt"},el("span",{},p.g+" · "+p.t),m?"sera mis à jour":"inchangé"),el("ul",{},L.map(x=>el("li",{},x))))));
+  const annule=()=>{for(const id of prov.keys())NEUF.delete(id);P.innerHTML="";P.append(el("p",{class:"depot"},"Annulé : rien n'a été modifié."))};
+  if(!mod.length)return P.append(el("button",{on:{click:annule}},"Fermer"));
+  P.append(el("div",{class:"ligne"},el("button",{class:"go",on:{click:()=>{D=Dn;mod.forEach(r=>MOD.add(r[0].id));JOURNAL.push(...mod.flatMap(r=>r[1].map(x=>r[0].id+" : "+x)));menu();enregistrer()}}},`Publier ${mod.length} page(s) sur le site`),el("button",{on:{click:annule}},"Annuler")));
+}
+$("#bRelire").onclick=relire;
+
+/* ---------- dossier FABLE_SITE : choisi une fois, retrouvé aux ouvertures suivantes ---------- */
+const bd=()=>new Promise((ok,ko)=>{const r=indexedDB.open("backoffice",1);r.onupgradeneeded=()=>r.result.createObjectStore("k");r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error)});
+const bdGet=async k=>{try{const b=await bd();return await new Promise(ok=>{const r=b.transaction("k").objectStore("k").get(k);r.onsuccess=()=>ok(r.result);r.onerror=()=>ok(null)})}catch(e){return null}};
+const bdSet=async(k,v)=>{try{const b=await bd();b.transaction("k","readwrite").objectStore("k").put(v,k)}catch(e){}};
+async function poseDossier(d){DOSSIER=d;try{ETAT=JSON.parse(await lire(d,"_backoffice/etat.json")||"0")||{v:1,pages:{}}}catch(e){ETAT={v:1,pages:{}}}
+  $("#bDossier").textContent="Dossier : "+d.name;$("#bRelire").disabled=false;etat(`Branche « ${BRANCHE} » · dossier « ${d.name} » prêt`)}
 $("#bDossier").onclick=async()=>{if(!window.showDirectoryPicker)return alert("Ce navigateur ne permet pas d'écrire dans un dossier : utilisez Edge ou Chrome.");
-  try{const d=await showDirectoryPicker({mode:"readwrite"});if(d.name!=="FABLE_SITE"&&!confirm(`Le dossier choisi s'appelle « ${d.name} », pas « FABLE_SITE ». Continuer ?`))return;DOSSIER=d;$("#bDossier").textContent="Dossier : "+d.name;etat(`Branche « ${BRANCHE} » · dossier « ${d.name} » prêt`)}catch(e){}};
+  try{const mem=await bdGet("dossier");if(mem&&!DOSSIER&&await mem.requestPermission({mode:"readwrite"})==="granted")return poseDossier(mem);
+    const d=await showDirectoryPicker({mode:"readwrite"});if(d.name!=="FABLE_SITE"&&!confirm(`Le dossier choisi s'appelle « ${d.name} », pas « FABLE_SITE ». Continuer ?`))return;await bdSet("dossier",d);poseDossier(d)}catch(e){}};
+bdGet("dossier").then(m=>{if(m&&!DOSSIER)$("#bDossier").textContent="Rouvrir le dossier "+m.name});
 addEventListener("beforeunload",e=>{if(MOD.size){e.preventDefault();e.returnValue=""}});
 if(!window.__test)ecranAcces();
 </script></body></html>
