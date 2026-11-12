@@ -144,8 +144,9 @@ main{min-height:80vh}
 .fi .l{padding:12px 14px 20px}
 .fi h3{font-size:26px;line-height:1.05}
 .fi .cap{display:block;margin-top:6px;font-size:11px}
-.onglets{display:flex;gap:22px;flex-wrap:wrap;margin-bottom:26px}
-.onglets a{font-family:var(--titre);font-size:clamp(26px,3.4vw,44px);color:var(--gris);border-bottom:2px solid transparent}
+.onglets{display:flex;gap:clamp(10px,1.5vw,24px);flex-wrap:nowrap;white-space:nowrap;margin-bottom:26px}
+@media(max-width:800px){.onglets{flex-wrap:wrap;gap:8px 16px}}
+.onglets a{font-family:var(--titre);font-size:clamp(19px,2.1vw,32px);color:var(--gris);border-bottom:2px solid transparent}
 .onglets a.on{color:var(--papier);border-color:var(--rouge)}
 
 /* vidéos */
